@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Chat and Bulletin Board</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.6/dist/purify.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #2e2e5e;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 10px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-6xl mx-auto bg-[#2e2e5e] p-6 sm:p-8 rounded-xl shadow-lg">
+        <h1 class="text-3xl sm:text-4xl font-bold text-center mb-6 text-white">Wilder Cardigans</h1>
+        
+        <!-- User Name Display -->
+        <div class="bg-gray-700 text-gray-300 p-2 rounded-lg text-sm mb-4">
+            <div class="mb-2">Your Username: <span id="userNameDisplay" class="font-mono text-white">Loading...</span></div>
+            <div class="flex items-center space-x-2">
+                <label for="userNameInput" class="whitespace-nowrap">Change Name:</label>
+                <input type="text" id="userNameInput" class="flex-1 p-2 rounded-lg bg-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300" placeholder="Enter a Username" />
+                <button onclick="saveName()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Save</button>
+                <span id="userNameStatus" class="text-green-400 text-xs font-semibold hidden">Saved!</span>
+            </div>
+        </div>
+
+        <!-- Message Box -->
+        <div id="messageBox" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl text-center">
+                <p id="messageText" class="text-white text-lg mb-4"></p>
+                <button onclick="document.getElementById('messageBox').classList.add('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">OK</button>
+            </div>
+        </div>
+
+        <!-- Main content container with flexbox for side-by-side layout -->
+        <div class="flex flex-col md:flex-row md:space-x-4">
+
+            <!-- Chat Section -->
+            <div class="flex-1 mb-8 md:mb-0">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Chat</h2>
+                <div id="chatMessages" class="bg-gray-800 p-4 rounded-lg h-80 overflow-y-auto mb-4 scrollbar-thin">
+                    <!-- Messages will be injected here -->
+                </div>
+                <div class="flex space-x-2 max-w-lg mx-auto">
+                    <input type="text" id="chatInput" class="flex-1 p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300" placeholder="Type a chat message..." />
+                    <button onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Send</button>
+                </div>
+            </div>
+
+            <!-- Bulletin Board Section -->
+            <div class="flex-1">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Bulletin Board</h2>
+                <div id="bulletinPosts" class="space-y-4 max-w-lg mx-auto">
+                    <!-- Bulletin board posts will be injected here -->
+                </div>
+                <div class="mt-4 p-4 rounded-lg bg-gray-800 max-w-lg mx-auto">
+                    <input type="text" id="postTitleInput" class="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 mb-2" placeholder="Post title" />
+                    <textarea id="postContentInput" class="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 mb-2" rows="3" placeholder="Post content (supports bold, italic, links, headings, lists, highlighting and underlining!)"></textarea>
+                    <button onclick="submitPost()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Submit Post</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        /*
+         * =========================================================================
+         * CRITICAL: FIREBASE SECURITY RULES
+         * =========================================================================
+         * This app requires specific security rules in your Firebase Firestore
+         * project to function correctly. Without these rules, you will get a
+         * "permission-denied" error.
+         *
+         * To fix this, you must update your Firestore rules.
+         *
+         * 1. Go to the Firebase console and open your project.
+         * 2. Navigate to "Build > Firestore Database" and then click on the "Rules" tab.
+         * 3. Replace all the code in the editor with the following:
+         *
+         * rules_version = '2';
+         * service cloud.firestore {
+         * match /databases/{database}/documents {
+         * match /artifacts/{appId}/public/data/{document=**} {
+         * allow read, write: if request.auth != null;
+         * }
+         * }
+         * }
+         *
+         * 4. Click "Publish" to save the changes. The app will then work correctly.
+         *
+         * =========================================================================
+         */
+        
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: The __app_id, __firebase_config, and __initial_auth_token variables are provided by the hosting environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Helper function to display messages
+        function showMessage(text) {
+            const messageBox = document.getElementById('messageBox');
+            document.getElementById('messageText').textContent = text;
+            messageBox.classList.remove('hidden');
+        }
+        
+        // Helper function to format text with clickable links
+        function formatTextWithLinks(text) {
+            const urlRegex = /(\b(https?:\/\/[^\s]+|www\.[^\s]+|[\w-]+\.[a-z]{2,}(?:\/[^\s]*)?)\b)/g;
+            
+            return text.replace(urlRegex, (url) => {
+                if (!url.startsWith('http')) {
+                    url = 'https://' + url;
+                }
+                return `<a href="${url}" target="_blank" class="text-blue-400 hover:text-blue-300 underline">${url}</a>`;
+            });
+        }
+
+        // Initialize Firebase
+        let app;
+        let db;
+        let auth;
+        let userId;
+
+        const initFirebase = async () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        const savedName = localStorage.getItem('userName');
+                        document.getElementById('userNameDisplay').textContent = savedName || userId;
+                        if (savedName) {
+                            document.getElementById('userNameInput').value = savedName;
+                        }
+                        setupChatListener();
+                        setupBulletinBoardListener();
+                    } else {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (anonError) {
+                            console.error("Error signing in anonymously:", anonError);
+                            showMessage("Failed to sign in. Please check the console for details.");
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error during Firebase initialization:", error);
+                if (error.code === 'permission-denied') {
+                    showMessage("Error: Permission Denied. Please check your Firestore security rules in the Firebase console.");
+                } else {
+                    showMessage("Failed to initialize the app. Please check the console for details.");
+                }
+            }
+        };
+
+        // --- User Name Functions ---
+        window.saveName = () => {
+            const userNameInput = document.getElementById('userNameInput');
+            const userNameStatus = document.getElementById('userNameStatus');
+            const userNameDisplay = document.getElementById('userNameDisplay');
+            const userName = userNameInput.value.trim();
+
+            if (userName) {
+                localStorage.setItem('userName', userName);
+                userNameDisplay.textContent = userName;
+                userNameStatus.textContent = 'Saved!';
+                userNameStatus.classList.remove('hidden');
+                setTimeout(() => {
+                    userNameStatus.classList.add('hidden');
+                }, 3000);
+            } else {
+                showMessage("Please enter a valid name.");
+            }
+        };
+
+        // --- Chat Functions ---
+        
+        function setupChatListener() {
+            const chatCollection = collection(db, `/artifacts/${appId}/public/data/chatMessages`);
+            const q = query(chatCollection);
+
+            onSnapshot(q, (snapshot) => {
+                const chatMessagesDiv = document.getElementById('chatMessages');
+                
+                const messages = [];
+                snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+                messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+
+                chatMessagesDiv.innerHTML = '';
+                messages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('mb-2', 'p-2', 'rounded-lg', 'break-words');
+                    
+                    const senderInfo = message.userName || message.userId;
+                    
+                    if (message.userId === userId) {
+                        messageElement.classList.add('bg-blue-600', 'text-white', 'self-end', 'ml-auto', 'max-w-[80%]');
+                    } else {
+                        messageElement.classList.add('bg-gray-700', 'text-gray-200', 'self-start', 'mr-auto', 'max-w-[80%]');
+                    }
+                    
+                    const timestamp = message.timestamp ? message.timestamp.toDate().toLocaleString() : 'Just now';
+                    const formattedText = formatTextWithLinks(message.text);
+                    
+                    messageElement.innerHTML = `
+                        <p class="text-sm text-gray-400 font-bold mb-1">${senderInfo} <span class="text-xs text-gray-500 font-normal">${timestamp}</span></p>
+                        <p class="text-base">${formattedText}</p>
+                    `;
+                    chatMessagesDiv.appendChild(messageElement);
+                });
+                chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+            }, (error) => {
+                 if (error.code === 'permission-denied') {
+                    showMessage("Error: Permission Denied. Please check your Firestore security rules in the Firebase console.");
+                } else {
+                    console.error("Error in chat listener:", error);
+                }
+            });
+        }
+        
+        window.sendMessage = async () => {
+            const chatInput = document.getElementById('chatInput');
+            const messageText = chatInput.value.trim();
+            const userName = document.getElementById('userNameInput').value.trim() || userId;
+            if (messageText === "") return;
+        
+            try {
+                const chatCollection = collection(db, `/artifacts/${appId}/public/data/chatMessages`);
+                await addDoc(chatCollection, {
+                    userId: userId,
+                    userName: userName,
+                    text: messageText,
+                    timestamp: serverTimestamp()
+                });
+                chatInput.value = "";
+            } catch (error) {
+                console.error("Error sending message:", error);
+                showMessage("Failed to send message. Please try again.");
+            }
+        };
+        
+        document.getElementById('chatInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // --- Bulletin Board Functions ---
+        
+        function setupBulletinBoardListener() {
+            // Add custom rules for Marked.js to handle highlight and underline syntax
+            const markedOptions = {
+                extensions: [
+                    {
+                        name: 'highlight',
+                        level: 'inline',
+                        start(src) { return src.indexOf('=='); },
+                        tokenizer(src, tokens) {
+                            const match = src.match(/^==([^=]+)==/);
+                            if (match) {
+                                return {
+                                    type: 'highlight',
+                                    raw: match[0],
+                                    text: this.lexer.inlineTokens(match[1])
+                                };
+                            }
+                        },
+                        renderer(token) {
+                            return `
+                                <mark class="bg-yellow-400 text-gray-900 px-1 py-0.5 rounded-sm">
+                                    ${this.parser.parseInline(token.text)}
+                                </mark>`;
+                        }
+                    },
+                    {
+                        name: 'underline',
+                        level: 'inline',
+                        start(src) { return src.indexOf('++'); },
+                        tokenizer(src, tokens) {
+                            const match = src.match(/^\+\+([^\+]+)\+\+/);
+                            if (match) {
+                                return {
+                                    type: 'underline',
+                                    raw: match[0],
+                                    text: this.lexer.inlineTokens(match[1])
+                                };
+                            }
+                        },
+                        renderer(token) {
+                            return `
+                                <u class="text-white decoration-2 decoration-dotted">
+                                    ${this.parser.parseInline(token.text)}
+                                </u>`;
+                        }
+                    }
+                ]
+            };
+            marked.use(markedOptions);
+
+            const postsCollection = collection(db, `/artifacts/${appId}/public/data/bulletinPosts`);
+            const q = query(postsCollection);
+            onSnapshot(q, (snapshot) => {
+                const bulletinPostsDiv = document.getElementById('bulletinPosts');
+                
+                const posts = [];
+                snapshot.forEach(doc => posts.push({ id: doc.id, ...doc.data() }));
+                posts.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+
+                bulletinPostsDiv.innerHTML = '';
+                posts.forEach((post, index) => {
+                    const postElement = document.createElement('div');
+                    postElement.classList.add('bg-gray-700', 'p-4', 'rounded-lg', 'shadow-md', 'break-words');
+                    
+                    const timestamp = post.timestamp ? post.timestamp.toDate().toLocaleString() : 'Just now';
+                    
+                    const senderInfo = post.userName || post.userId;
+                    
+                    const markdownToHtml = marked.parse(post.content);
+                    const safeHtml = DOMPurify.sanitize(markdownToHtml);
+                    
+                    postElement.innerHTML = `
+                        <h3 class="text-xl font-bold mb-1 text-white">${post.title}</h3>
+                        <p class="text-sm text-gray-400 mb-2">Posted by: <span class="font-mono">${senderInfo}</span> on ${timestamp}</p>
+                        <div class="prose prose-sm dark:prose-invert max-w-none text-gray-300 mb-4">${safeHtml}</div>
+                        ${post.userId === userId ? `<button onclick="deletePost('${post.id}')" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded-lg transition duration-300">Delete</button>` : ''}
+                    `;
+                    bulletinPostsDiv.appendChild(postElement);
+                });
+            }, (error) => {
+                if (error.code === 'permission-denied') {
+                    showMessage("Error: Permission Denied. Please check your Firestore security rules in the Firebase console.");
+                } else {
+                    console.error("Error in bulletin board listener:", error);
+                }
+            });
+        }
+        
+        window.submitPost = async () => {
+            const titleInput = document.getElementById('postTitleInput');
+            const contentInput = document.getElementById('postContentInput');
+            const title = titleInput.value.trim();
+            const content = contentInput.value.trim();
+            const userName = document.getElementById('userNameInput').value.trim() || userId;
+        
+            if (title === "" || content === "") {
+                showMessage("Please enter both a title and content for your post.");
+                return;
+            }
+        
+            try {
+                const postsCollection = collection(db, `/artifacts/${appId}/public/data/bulletinPosts`);
+                await addDoc(postsCollection, {
+                    userId: userId,
+                    userName: userName,
+                    title: title,
+                    content: content,
+                    timestamp: serverTimestamp()
+                });
+                titleInput.value = "";
+                contentInput.value = "";
+            } catch (error) {
+                console.error("Error submitting post:", error);
+                showMessage("Failed to submit post. Please try again.");
+            }
+        };
+        
+        window.deletePost = async (postId) => {
+            try {
+                const postDoc = doc(db, `/artifacts/${appId}/public/data/bulletinPosts`, postId);
+                await deleteDoc(postDoc);
+            } catch (error) {
+                console.error("Error deleting post:", error);
+                showMessage("Failed to delete post. Please try again.");
+            }
+        };
+
+        // Initialize on window load
+        window.onload = initFirebase;
+
+    </script>
+</body>
+</html>
