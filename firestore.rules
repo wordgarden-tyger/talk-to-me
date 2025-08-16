@@ -1,9 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // This allows authenticated users to read and write to all documents
-    // under the 'public/data' path.
-    match /artifacts/{appId}/public/data/{document=**} {
+    // This allows authenticated users to read and write to the chat and bulletin board collections.
+    // The "request.auth != null" condition ensures that only users who have been authenticated by the app can access the data.
+    match /artifacts/{appId}/public/data/{collectionId}/{documentId} {
       allow read, write: if request.auth != null;
     }
   }
